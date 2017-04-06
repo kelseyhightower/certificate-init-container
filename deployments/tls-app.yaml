@@ -1,0 +1,59 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: tls-app
+  labels:
+    app: tls-app
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: tls-app
+    spec:
+      initContainers:
+        - name: certificate-init-container
+          image: gcr.io/hightowerlabs/certificate-init-container:0.0.1
+          imagePullPolicy: Always
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args:
+            - "-additional-dnsnames=example.com"
+            - "-cert-dir=/etc/tls"
+            - "-namespace=$(NAMESPACE)"
+            - "-pod-ip=$(POD_IP)"
+            - "-pod-name=$(POD_NAME)"
+            - "-service-names=tls-app"            
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+      containers:
+        - name: tls-app
+          image: gcr.io/hightowerlabs/tls-app:1.0.0
+          imagePullPolicy: Always
+          args:
+            - "-tls-cert=/etc/tls/tls.crt"
+            - "-tls-key=/etc/tls/tls.key"
+          ports:
+            - containerPort: 443 
+          resources:
+            limits:
+              memory: "50Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+      volumes:
+        - name: tls
+          emptyDir: {}

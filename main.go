@@ -178,8 +178,35 @@ func main() {
 		log.Fatalf("unable to create the certificate signing request: %s", err)
 	}
 
-	var certificate []byte
+	log.Println("approving CSR...")
+	for {
+		csr, err := client.CertificatesV1Beta1().GetCertificateSigningRequest(context.Background(), certificateSigningRequestName)
+		if err != nil {
+			log.Printf("unable to retrieve certificate signing request (%s): %s", certificateSigningRequestName, err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
 
+		approvalType := "Approved"
+		reason := "InitContainerApprove"
+		message := "This CSR was approved by InitContainer certificate approve."
+		var timeNow v1.Time
+		timeNow.GetSeconds()
+		fmt.Printf("%#v\n", timeNow)
+		csr.Status.Conditions = append(csr.Status.Conditions, &certificates.CertificateSigningRequestCondition{
+			Type:           &approvalType,
+			Reason:         &reason,
+			Message:        &message,
+			LastUpdateTime: &timeNow,
+		})
+		_, err = client.CertificatesV1Beta1().UpdateCertificateSigningRequest(context.Background(), csr)
+		if err != nil {
+			log.Fatalf("unable to approve the certificate signing request: %s", err)
+		}
+		break
+	}
+
+	var certificate []byte
 	log.Println("waiting for certificate...")
 	for {
 		csr, err := client.CertificatesV1Beta1().GetCertificateSigningRequest(context.Background(), certificateSigningRequestName)

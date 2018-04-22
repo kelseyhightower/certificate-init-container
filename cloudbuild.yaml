@@ -3,6 +3,6 @@ steps:
     env: ["PROJECT_ROOT=certificate-init-container"]
     args: ["install", "."]
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "gcr.io/${PROJECT_ID}/certificate-init-container:0.0.1", "."]
+    args: ["build", "-t", "gcr.io/${PROJECT_ID}/certificate-init-container:0.0.2", "."]
 
-images: ["gcr.io/${PROJECT_ID}/certificate-init-container:0.0.1"]
+images: ["gcr.io/${PROJECT_ID}/certificate-init-container:0.0.2"]

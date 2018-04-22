@@ -13,6 +13,7 @@ import (
     "log"
 
     "github.com/ericchiang/k8s"
+    corev1 "github.com/ericchiang/k8s/apis/core/v1"
 )
 
 func main() {
@@ -21,15 +22,23 @@ func main() {
         log.Fatal(err)
     }
 
-    nodes, err := client.CoreV1().ListNodes(context.Background())
-    if err != nil {
+    var nodes corev1.NodeList
+    if err := client.List(context.Background(), "", &nodes); err != nil {
         log.Fatal(err)
     }
     for _, node := range nodes.Items {
-        fmt.Printf("name=%q schedulable=%t\n", node.Metadata.Name, !*node.Spec.Unschedulable)
+        fmt.Printf("name=%q schedulable=%t\n", *node.Metadata.Name, !*node.Spec.Unschedulable)
     }
 }
 ```
+
+## Should I use this or client-go?
+
+client-go is a framework for building production ready controllers, components that regularly watch API resources and push the system towards a desired state. If you're writing a program that watches several resources in a loop for long durations, client-go's informers framework is a battle tested solution which will scale with the size of the cluster.		
+
+This client should be used by programs that just need to talk to the Kubernetes API without prescriptive solutions for caching, reconciliation on failures, or work queues. This often includes components are relatively Kubernetes agnostic, but use the Kubernetes API for small tasks when running in Kubernetes. For example, performing leader election or persisting small amounts of state in annotations or configmaps.		
+
+TL;DR - Use client-go if you're writing a controller.
 
 ## Requirements
 
@@ -38,21 +47,161 @@ func main() {
 * [github.com/golang/protobuf/proto][go-proto] (protobuf serialization)
 * [golang.org/x/net/http2][go-http2] (HTTP/2 support)
 
-## Versioned supported
-
-This client supports every API group version present since 1.3.
-
 ## Usage
 
-### Namespaces
+### Create, update, delete
+
+The type of the object passed to `Create`, `Update`, and `Delete` determine the resource being acted on.
 
 ```go
-pods, err := client.ListPods(ctx, k8s.AllNamespaces) // Pods in all namespaces.
+configMap := &corev1.ConfigMap{
+    Metadata: &metav1.ObjectMeta{
+        Name:      k8s.String("my-configmap"),
+        Namespace: k8s.String("my-namespace"),
+    },
+    Data: map[string]string{"hello": "world"},
+}
+
+if err := client.Create(ctx, configMap); err != nil {
+    // handle error
+}
+
+configMap.Data["hello"] = "kubernetes"
+
+if err := client.Update(ctx, configMap); err != nil {
+    // handle error
+}
+
+if err := client.Delete(ctx, configMap); err != nil {
+    // handle error
+}
 ```
 
+### Get, list, watch
+
+Getting a resource requires providing a namespace (for namespaced objects) and a name.
+
 ```go
-pods, err := client.ListPods(ctx, "custom-namespace") // Pods from the "custom-namespace"
+// Get the "cluster-info" configmap from the "kube-public" namespace
+var configMap corev1.ConfigMap
+err := client.Get(ctx, "kube-public", "cluster-info", &configMap)
 ```
+
+When performing a list operation, the namespace to list or watch is also required.
+
+```go
+// Pods from the "custom-namespace"
+var pods corev1.PodList
+err := client.List(ctx, "custom-namespace", &pods)
+```
+
+A special value `AllNamespaces` indicates that the list or watch should be performed on all cluster resources.
+
+```go
+// Pods in all namespaces
+var pods corev1.PodList
+err := client.List(ctx, k8s.AllNamespaces, &pods)
+```
+
+Watches require a example type to determine what resource they're watching. `Watch` returns an type which can be used to receive a stream of events. These events include resources of the same kind and the kind of the event (added, modified, deleted).
+
+```go
+// Watch configmaps in the "kube-system" namespace
+var configMap corev1.ConfigMap
+watcher, err := client.Watch(ctx, "kube-system", &configMap)
+if err != nil {
+    // handle error
+}
+defer watcher.Close()
+
+for {
+    cm := new(corev1.ConfigMap)
+    eventType, err := watcher.Next(cm)
+    if err != nil {
+        // watcher encountered and error, exit or create a new watcher
+    }
+    fmt.Println(eventType, *cm.Metadata.Name)
+}
+```
+
+Both in-cluster and out-of-cluster clients are initialized with a primary namespace. This is the recommended value to use when listing or watching.
+
+```go
+client, err := k8s.NewInClusterClient()
+if err != nil {
+    // handle error
+}
+
+// List pods in the namespace the client is running in.
+var pods corev1.PodList
+err := client.List(ctx, client.Namespace, &pods)
+```
+
+### Custom resources
+
+Client operations support user defined resources, such as resources provided by [CustomResourceDefinitions][crds] and [aggregated API servers][custom-api-servers].  To use a custom resource, define an equivalent Go struct then register it with the `k8s` package. By default the client will use JSON serialization when encoding and decoding custom resources.
+
+```go
+import (
+    "github.com/ericchiang/k8s"
+    metav1 "github.com/ericchiang/k8s/apis/meta/v1"
+)
+
+type MyResource struct {
+    Metadata *metav1.ObjectMeta `json:"metadata"`
+    Foo      string             `json:"foo"`
+    Bar      int                `json:"bar"`
+}
+
+// Required for MyResource to implement k8s.Resource
+func (m *MyResource) GetMetadata() *metav1.ObjectMeta {
+    return m.Metadata
+}
+
+type MyResourceList struct {
+    Metadata *metav1.ListMeta `json:"metadata"`
+    Items    []MyResource     `json:"items"`
+}
+
+// Require for MyResourceList to implement k8s.ResourceList
+func (m *MyResourceList) GetMetadata() *metav1.ListMeta {
+    return m.Metadata
+}
+
+func init() {
+    // Register resources with the k8s package.
+    k8s.Register("resource.example.com", "v1", "myresources", true, &MyResource{})
+    k8s.RegisterList("resource.example.com", "v1", "myresources", true, &MyResourceList{})
+}
+```
+
+Once registered, the library can use the custom resources like any other.
+
+```
+func do(ctx context.Context, client *k8s.Client, namespace string) error {
+    r := &MyResource{
+        Metadata: &metav1.ObjectMeta{
+            Name:      k8s.String("my-custom-resource"),
+            Namespace: &namespace,
+        },
+        Foo: "hello, world!",
+        Bar: 42,
+    }
+    if err := client.Create(ctx, r); err != nil {
+        return fmt.Errorf("create: %v", err)
+    }
+    r.Bar = -8
+    if err := client.Update(ctx, r); err != nil {
+        return fmt.Errorf("update: %v", err)
+    }
+    if err := client.Delete(ctx, r); err != nil {
+        return fmt.Errorf("delete: %v", err)
+    }
+    return nil
+}
+```
+
+If the custom type implements [`proto.Message`][proto-msg], the client will prefer protobuf when encoding and decoding the type.
 
 ### Label selectors
 
@@ -63,37 +212,8 @@ l := new(k8s.LabelSelector)
 l.Eq("tier", "production")
 l.In("app", "database", "frontend")
 
-pods, err := client.CoreV1().ListPods(ctx, "", l.Selector())
+pods, err := client.CoreV1().ListPods(ctx, client.Namespace, l.Selector())
 ```
-
-### Working with resources
-
-Use the generated API types directly to create and modify resources.
-
-```go
-import (
-    "context"
-
-    "github.com/ericchiang/k8s"
-    "github.com/ericchiang/k8s/api/v1"
-    metav1 "github.com/ericchiang/k8s/apis/meta/v1"
-)
-
-func createConfigMap(client *k8s.Client, name string, values map[string]string) error {
-    cm := &v1.ConfigMap{
-        Metadata: &metav1.ObjectMeta{
-            Name:      &name,
-            Namespace: &client.Namespace,
-        },
-        Data: values,
-    }
-    // Will return the created configmap as well.
-    _, err := client.CoreV1().CreateConfigMap(context.TODO(), cm)
-    return err
-}
-```
-
-API structs use pointers to `int`, `bool`, and `string` types to differentiate between the zero value and an unsupplied one. This package provides [convenience methods][string] for creating pointers to literals of basic types.
 
 ### Creating out-of-cluster clients
 
@@ -142,7 +262,7 @@ func createConfigMap(client *k8s.Client, name string, values map[string]string) 
         Data: values,
     }
 
-    _, err := client.CoreV1().CreateConfigMap(context.TODO(), cm)
+    err := client.Create(context.TODO(), cm)
 
     // If an HTTP error was returned by the API server, it will be of type
     // *k8s.APIError. This can be used to inspect the status code.
@@ -164,3 +284,6 @@ func createConfigMap(client *k8s.Client, name string, values map[string]string) 
 [k8s-error]: https://godoc.org/github.com/ericchiang/k8s#APIError
 [config]: https://godoc.org/github.com/ericchiang/k8s#Config
 [string]: https://godoc.org/github.com/ericchiang/k8s#String
+[crds]: https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/
+[custom-api-servers]: https://kubernetes.io/docs/concepts/api-extension/apiserver-aggregation/
+[proto-msg]: https://godoc.org/github.com/golang/protobuf/proto#Message 

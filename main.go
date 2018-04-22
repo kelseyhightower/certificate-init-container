@@ -165,15 +165,16 @@ func main() {
 	certificateSigningRequest := &certificates.CertificateSigningRequest{
 		Metadata: &v1.ObjectMeta{
 			Name: k8s.String(certificateSigningRequestName),
+			Namespace: k8s.String(namespace),
 		},
 		Spec: &certificates.CertificateSigningRequestSpec{
 			Groups:   []string{"system:authenticated"},
 			Request:  certificateRequestBytes,
-			KeyUsage: []string{"digital signature", "key encipherment", "server auth", "client auth"},
+			Usages: []string{"digital signature", "key encipherment", "server auth", "client auth"},
 		},
 	}
 
-	_, err = client.CertificatesV1Beta1().CreateCertificateSigningRequest(context.Background(), certificateSigningRequest)
+	err = client.Create(context.Background(), certificateSigningRequest)
 	if err != nil {
 		log.Fatalf("unable to create the certificate signing request: %s", err)
 	}
@@ -182,7 +183,8 @@ func main() {
 
 	log.Println("waiting for certificate...")
 	for {
-		csr, err := client.CertificatesV1Beta1().GetCertificateSigningRequest(context.Background(), certificateSigningRequestName)
+		var csr certificates.CertificateSigningRequest
+		err := client.Get(context.Background(), namespace, certificateSigningRequestName, &csr)
 		if err != nil {
 			log.Printf("unable to retrieve certificate signing request (%s): %s", certificateSigningRequestName, err)
 			time.Sleep(5 * time.Second)

@@ -38,6 +38,7 @@ var (
 	additionalDNSNames string
 	certDir            string
 	clusterDomain      string
+	headlessNameAsCN   bool
 	hostname           string
 	namespace          string
 	podIP              string
@@ -51,6 +52,7 @@ func main() {
 	flag.StringVar(&additionalDNSNames, "additional-dnsnames", "", "additional dns names; comma separated")
 	flag.StringVar(&certDir, "cert-dir", "/etc/tls", "The directory where the TLS certs should be written")
 	flag.StringVar(&clusterDomain, "cluster-domain", "cluster.local", "Kubernetes cluster domain")
+	flag.BoolVar(&headlessNameAsCN, "headless-name-as-cn", false, "If a headless domain name is provided, use it as CN")
 	flag.StringVar(&hostname, "hostname", "", "hostname as defined by pod.spec.hostname")
 	flag.StringVar(&namespace, "namespace", "default", "namespace as defined by pod.metadata.namespace")
 	flag.StringVar(&podName, "pod-name", "", "name as defined by pod.metadata.name")
@@ -216,7 +218,12 @@ func main() {
 func defaultDNSNames(ip, hostname, subdomain, namespace, clusterDomain string) []string {
 	ns := []string{podDomainName(ip, namespace, clusterDomain)}
 	if hostname != "" && subdomain != "" {
-		ns = append(ns, podHeadlessDomainName(hostname, subdomain, namespace, clusterDomain))
+		headlessName := podHeadlessDomainName(hostname, subdomain, namespace, clusterDomain)
+		if headlessNameAsCN {
+			ns = append([]string{headlessName}, ns...)
+		} else {
+			ns = append(ns, headlessName)
+		}
 	}
 	return ns
 }

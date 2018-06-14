@@ -70,7 +70,6 @@ Subject Alternative Names:
                         example.com
                         tls-app.default.svc.cluster.local
         IP Addresses:   10.228.0.10
-                        127.0.0.1
 Events:	<none>
 ```
 

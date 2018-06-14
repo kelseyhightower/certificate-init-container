@@ -90,14 +90,13 @@ func main() {
 	// Gather the list of IP addresses for the certificate's IP SANs field which
 	// include:
 	//   - the pod IP address
-	//   - 127.0.0.1 for localhost access
 	//   - each service IP address that maps to this pod
 	ip := net.ParseIP(podIP)
 	if ip.To4() == nil && ip.To16() == nil {
 		log.Fatal("invalid pod IP address")
 	}
 
-	ipaddresses := []net.IP{ip, net.ParseIP("127.0.0.1")}
+	ipaddresses := []net.IP{ip}
 
 	for _, s := range strings.Split(serviceIPs, ",") {
 		if s == "" {

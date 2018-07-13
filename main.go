@@ -29,6 +29,7 @@ import (
 	"time"
 
 	certificates "github.com/ericchiang/k8s/apis/certificates/v1beta1"
+	"github.com/ghodss/yaml"
 
 	"github.com/ericchiang/k8s"
 	"github.com/ericchiang/k8s/apis/meta/v1"
@@ -45,6 +46,7 @@ var (
 	serviceIPs         string
 	serviceNames       string
 	subdomain          string
+	kubeconfig         string
 )
 
 func main() {
@@ -58,11 +60,30 @@ func main() {
 	flag.StringVar(&serviceNames, "service-names", "", "service names that resolve to this Pod; comma separated")
 	flag.StringVar(&serviceIPs, "service-ips", "", "service IP addresses that resolve to this Pod; comma separated")
 	flag.StringVar(&subdomain, "subdomain", "", "subdomain as defined by pod.spec.subdomain")
+	flag.StringVar(&kubeconfig, "kubeconfig", "", "alternate KUBECONFIG to coordinate certificate signing with a different cluster's CA")
 	flag.Parse()
 
 	certificateSigningRequestName := fmt.Sprintf("%s-%s", podName, namespace)
 
-	client, err := k8s.NewInClusterClient()
+	var client *k8s.Client
+	var clientConfig k8s.Config
+	var err error
+
+	if len(kubeconfig) > 0 {
+		data, err := ioutil.ReadFile(kubeconfig)
+		if err != nil {
+			log.Fatalf("unable to read provided KUBECONFIG: %v", err)
+		}
+
+		if err := yaml.Unmarshal(data, &clientConfig); err != nil {
+			log.Fatalf("unable to parse KUBECONFIG (%s): %v", kubeconfig, err)
+		}
+
+		client, err = k8s.NewClient(&clientConfig)
+	} else {
+		client, err = k8s.NewInClusterClient()
+	}
+
 	if err != nil {
 		log.Fatalf("unable to create a Kubernetes client: %s", err)
 	}

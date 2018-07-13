@@ -32,6 +32,7 @@ import (
 
 	"github.com/ericchiang/k8s"
 	"github.com/ericchiang/k8s/apis/meta/v1"
+	"github.com/youmark/pkcs8"
 )
 
 var (
@@ -40,6 +41,7 @@ var (
 	clusterDomain      string
 	hostname           string
 	namespace          string
+	pkcs8Format        bool
 	podIP              string
 	podName            string
 	serviceIPs         string
@@ -53,6 +55,7 @@ func main() {
 	flag.StringVar(&clusterDomain, "cluster-domain", "cluster.local", "Kubernetes cluster domain")
 	flag.StringVar(&hostname, "hostname", "", "hostname as defined by pod.spec.hostname")
 	flag.StringVar(&namespace, "namespace", "default", "namespace as defined by pod.metadata.namespace")
+	flag.BoolVar(&pkcs8Format, "pkcs8", false, "output secret in unencrypted PKCS#8 (java does not support PKCS#1)")
 	flag.StringVar(&podName, "pod-name", "", "name as defined by pod.metadata.name")
 	flag.StringVar(&podIP, "pod-ip", "", "IP address as defined by pod.status.podIP")
 	flag.StringVar(&serviceNames, "service-names", "", "service names that resolve to this Pod; comma separated")
@@ -75,9 +78,22 @@ func main() {
 		log.Fatalf("unable to genarate the private key: %s", err)
 	}
 
+	var ptype string
+	var pkey []byte
+	if pkcs8Format {
+		ptype = "PRIVATE KEY"
+		pkey, err = pkcs8.ConvertPrivateKeyToPKCS8(key)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		ptype = "RSA PRIVATE KEY"
+		pkey = x509.MarshalPKCS1PrivateKey(key)
+	}
+
 	pemKeyBytes := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
+		Type:  ptype,
+		Bytes: pkey,
 	})
 
 	keyFile := path.Join(certDir, "tls.key")

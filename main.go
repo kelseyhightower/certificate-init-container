@@ -45,6 +45,7 @@ var (
 	serviceIPs         string
 	serviceNames       string
 	subdomain          string
+	keysize            int
 )
 
 func main() {
@@ -58,6 +59,7 @@ func main() {
 	flag.StringVar(&serviceNames, "service-names", "", "service names that resolve to this Pod; comma separated")
 	flag.StringVar(&serviceIPs, "service-ips", "", "service IP addresses that resolve to this Pod; comma separated")
 	flag.StringVar(&subdomain, "subdomain", "", "subdomain as defined by pod.spec.subdomain")
+	flag.IntVar(&keysize, "keysize", 2048, "bit size of private key")
 	flag.Parse()
 
 	certificateSigningRequestName := fmt.Sprintf("%s-%s", podName, namespace)
@@ -70,7 +72,7 @@ func main() {
 	// Generate a private key, pem encode it, and save it to the filesystem.
 	// The private key will be used to create a certificate signing request (csr)
 	// that will be submitted to a Kubernetes CA to obtain a TLS certificate.
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, keysize)
 	if err != nil {
 		log.Fatalf("unable to genarate the private key: %s", err)
 	}

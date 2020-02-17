@@ -1,0 +1,9 @@
+github.com/ericchiang/k8s v1.0.0 h1:TaEY20P+2TkZo9+eMVnARQLIUWT6lJzGKznG30zc834=
+github.com/ericchiang/k8s v1.0.0/go.mod h1:/OmBgSq2cd9IANnsGHGlEz27nwMZV2YxlpXuQtU3Bz4=
+github.com/golang/protobuf v1.0.0 h1:lsek0oXi8iFE9L+EXARyHIjU5rlWIhhTkjDz3vHhWWQ=
+github.com/golang/protobuf v1.0.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
+golang.org/x/net v0.0.0-20180420171651-5f9ae10d9af5 h1:ylIG3jIeS45kB0W95N19kS62fwermjMYLIyybf8xh9M=
+golang.org/x/net v0.0.0-20180420171651-5f9ae10d9af5/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/text v0.0.0-20171214130843-f21a4dfb5e38 h1:yr7ItWHARpqySNZjEh5mPMHrw3xPR9tMnomFZVcO1mQ=
+golang.org/x/text v0.0.0-20171214130843-f21a4dfb5e38/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

@@ -151,4 +151,6 @@ Usage of certificate-init-container:
     	service names that resolve to this Pod; comma separated
   -subdomain string
     	subdomain as defined by pod.spec.subdomain
+  -keysize int
+        bit size of private key (default 2048)
 ```

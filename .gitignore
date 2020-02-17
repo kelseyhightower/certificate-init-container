@@ -1,3 +1,4 @@
 *.csr
 *.crt
 *.key
+certificate-init-container

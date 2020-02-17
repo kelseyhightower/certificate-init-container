@@ -31,7 +31,7 @@ import (
 	certificates "github.com/ericchiang/k8s/apis/certificates/v1beta1"
 
 	"github.com/ericchiang/k8s"
-	"github.com/ericchiang/k8s/apis/meta/v1"
+	v1 "github.com/ericchiang/k8s/apis/meta/v1"
 )
 
 var (
@@ -45,6 +45,7 @@ var (
 	serviceIPs         string
 	serviceNames       string
 	subdomain          string
+	keysize            int
 )
 
 func main() {
@@ -58,6 +59,7 @@ func main() {
 	flag.StringVar(&serviceNames, "service-names", "", "service names that resolve to this Pod; comma separated")
 	flag.StringVar(&serviceIPs, "service-ips", "", "service IP addresses that resolve to this Pod; comma separated")
 	flag.StringVar(&subdomain, "subdomain", "", "subdomain as defined by pod.spec.subdomain")
+	flag.IntVar(&keysize, "keysize", 2048, "bit size of private key")
 	flag.Parse()
 
 	certificateSigningRequestName := fmt.Sprintf("%s-%s", podName, namespace)
@@ -70,7 +72,7 @@ func main() {
 	// Generate a private key, pem encode it, and save it to the filesystem.
 	// The private key will be used to create a certificate signing request (csr)
 	// that will be submitted to a Kubernetes CA to obtain a TLS certificate.
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, keysize)
 	if err != nil {
 		log.Fatalf("unable to genarate the private key: %s", err)
 	}
@@ -165,12 +167,11 @@ func main() {
 	certificateSigningRequest := &certificates.CertificateSigningRequest{
 		Metadata: &v1.ObjectMeta{
 			Name: k8s.String(certificateSigningRequestName),
-			Namespace: k8s.String(namespace),
 		},
 		Spec: &certificates.CertificateSigningRequestSpec{
-			Groups:   []string{"system:authenticated"},
-			Request:  certificateRequestBytes,
-			Usages: []string{"digital signature", "key encipherment", "server auth", "client auth"},
+			Groups:  []string{"system:authenticated"},
+			Request: certificateRequestBytes,
+			Usages:  []string{"digital signature", "key encipherment", "server auth", "client auth"},
 		},
 	}
 
@@ -184,7 +185,7 @@ func main() {
 	log.Println("waiting for certificate...")
 	for {
 		var csr certificates.CertificateSigningRequest
-		err := client.Get(context.Background(), namespace, certificateSigningRequestName, &csr)
+		err := client.Get(context.Background(), "", certificateSigningRequestName, &csr)
 		if err != nil {
 			log.Printf("unable to retrieve certificate signing request (%s): %s", certificateSigningRequestName, err)
 			time.Sleep(5 * time.Second)
